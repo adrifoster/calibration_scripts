@@ -1,14 +1,10 @@
 import os
-import xarray as xr
 import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-from esem.utils import get_random_params
 import emulation_functions as emf
 import argparse
 from mpi4py import MPI
 
-from FATES_calibration_constants import OBS_MODEL_VARS, VAR_UNITS, FATES_PFT_IDS, FATES_INDEX
+from fates_calibration.FATES_calibration_constants import FATES_PFT_IDS, FATES_INDEX
 
 DEFAULT_PARS = {
     'broadleaf_evergreen_tropical_tree': ['fates_turb_leaf_diameter', 'fates_turb_z0mr',
@@ -18,82 +14,6 @@ DEFAULT_PARS = {
                                           'fates_leaf_slatop', 'fates_allom_fnrt_prof_a',
                                           'fates_allom_fnrt_prof_b', 'fates_turb_displar']
 }
-
-def implausibility_metric(pred, obs, pred_var, obs_var):
-
-    top = np.abs(pred - obs)
-    bottom = np.sqrt(pred_var + obs_var)
-
-    imp = top/bottom
-
-    return imp
-
-def sensitivity_analysis(emulators, param_names, pft_id, out_dir, wave, update_vars=None,
-                         default_pars=None, plot_figs=False):
-    
-    sensitivity_dfs = []
-    for var, emulator in emulators.items():        
-        
-        problem, fast_sample = emf.create_fast_sample(param_names, update_vars)
-        
-        if default_pars is not None:
-            fast_sample = emf.update_sample(fast_sample, default_pars, param_names)
-        
-        sens_df = emf.fourier_sensitivity(emulator, problem, fast_sample)
-        sens_df['var'] = var
-        sensitivity_dfs.append(sens_df)
-    
-        if plot_figs:
-            emf.plot_fourier_sensitivity(sens_df, f'{var} for {pft_id} Grids')
-            plt.savefig(f'{out_dir}/{var}_emulator_fourier_sensitivity_w{wave}.png',
-                        bbox_inches='tight', dpi=300)
-    
-            emf.plot_oaat_sens(param_names, emulator)
-            plt.savefig(f'{out_dir}/{var}_emulator_oaat_sensitivity_w{wave}.png',
-                            bbox_inches='tight', dpi=300)
-            
-    em_sensitivity = pd.concat(sensitivity_dfs)
-    em_sensitivity['wave'] = wave
-
-    return em_sensitivity
-
-def sample_emulators(emulators, param_names, n_samp, obs_df, out_dir, pft_id,
-                     wave, update_vars=None, default_pars=None, plot_figs=False):
-    
-    # get a random sample
-    sample = get_random_params(len(param_names), n_samp)
-    
-    # update the sample if we are updating
-    if update_vars is not None:
-        sample = emf.update_sample(sample, update_vars, param_names)
-    
-    if default_pars is not None:
-        sample = emf.update_sample(sample, default_pars, param_names)
-        
-    sample_df = pd.DataFrame(sample)
-    sample_df.columns = param_names
-
-    for var, emulator in emulators.items():
-        
-        # predict sample
-        pred_sampled, pred_sampled_var = emulator.predict(sample)
-
-        # observational mean and variance
-        obs_mean = obs_df[f'{OBS_MODEL_VARS[var]}'].mean()
-        obs_var = obs_df[f'{OBS_MODEL_VARS[var]}_var'].mean()
-
-        if plot_figs:
-            emf.plot_emulated_sample(pred_sampled, obs_mean, obs_var, pft_id, var,
-                                 VAR_UNITS[var])
-            plt.savefig(f'{out_dir}/{var}_emulated_sample_w{wave}.png',
-                        bbox_inches='tight', dpi=300)
-
-        # calculate implausibility metric
-        implaus = implausibility_metric(pred_sampled, obs_mean, pred_sampled_var,
-                                        obs_var)
-        sample_df[f'{var}_implausibility'] = implaus
-
-    return sample_df
 
 def choose_params(sample_df, sens_df, vars, implausibility_tol, sens_tol):
 
@@ -107,7 +27,7 @@ def choose_params(sample_df, sens_df, vars, implausibility_tol, sens_tol):
 
     if sample_sub.shape[0] > 0 and len(sensitive_pars) > 0:
         best_sample = emf.find_best_parameter_sets(sample_sub)
-        sample_out = best_sample.loc[:, sensitive_pars]
+        sample_out = best_sample.loc[:, [sensitive_pars, 'implaus_sum']]
     
         return sample_out.reset_index(drop=True)
     else:
@@ -117,12 +37,12 @@ def calibration_wave(emulators, param_names, n_samp, obs_df, pft_id, out_dir, wa
                      implausibility_tol, sens_tol, update_vars=None, default_pars=None,
                      plot_figs=False):
     
-    sens_df = sensitivity_analysis(emulators, param_names, pft_id, out_dir, wave,
+    sens_df = emf.sensitivity_analysis(emulators, param_names, pft_id, out_dir, wave,
                                    update_vars=update_vars, default_pars=default_pars,
                                    plot_figs=plot_figs)
     
-    sample_df = sample_emulators(emulators, param_names, n_samp, obs_df, out_dir, pft_id,
-                     wave, update_vars=update_vars, default_pars=default_pars,
+    sample_df = emf.sample_emulators(emulators, param_names, n_samp, obs_df, out_dir, pft_id,
+                     update_vars=update_vars, default_pars=default_pars,
                      plot_figs=plot_figs)
     
     best_sample = choose_params(sample_df, sens_df, list(emulators.keys()),
@@ -186,9 +106,7 @@ def commandline_args():
     """Parse and return command-line arguments"""
 
     description = """
-
-    Typical usage:
-
+    Typical usage: python calibrate_emulate_sample --pft broadleaf_evergreen_tropical_tree
 
     """
     parser = argparse.ArgumentParser(
@@ -238,10 +156,10 @@ def commandline_args():
         help="path to observations data frame\n",
     )
     parser.add_argument(
-        "--num_samples",
+        "--bootstraps",
         type=int,
         default=1,
-        help="sample number\n",
+        help="Number of times to run calibration\n",
     )
 
     args = parser.parse_args()
@@ -268,15 +186,17 @@ def main():
     if not os.path.isdir(sample_dir):
         os.mkdir(sample_dir)
     
-    for i in range(args.num_samples):
+    best_sets = []
+    for _ in range(args.bootstraps):
         best_param_set = run_calibration(out_dir, args.pft, vars, emulator_dir, args.lhkey,
                                         args.obs_file, args.nsamp, args.imp_tol, 
                                         args.sens_tol, args.num_waves)
-        
-        file_name = f"param_vals_{str(comm.rank)}_{i}.csv"
-        best_param_set.to_csv(os.path.join(sample_dir, file_name))
-        
+        best_sets.append(best_param_set)
     
+    file_name = f"param_vals_{str(comm.rank)}.csv"
+    best_params = pd.concat(best_sets)
+    best_params.to_csv(os.path.join(sample_dir, file_name))
+        
 if __name__ == "__main__":
     main()
 

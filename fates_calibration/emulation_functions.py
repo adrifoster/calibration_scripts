@@ -5,12 +5,14 @@ from esem.wrappers import wrap_data
 from esem.data_processors import Flatten
 from esem.model_adaptor import GPFlowModel
 from esem.emulator import Emulator
+from esem.utils import get_random_params
 import gpflow
 import pickle
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 from SALib.sample import fast_sampler
 from SALib.analyze import fast
+from fates_calibration.FATES_calibration_constants import OBS_MODEL_VARS, VAR_UNITS
 
 def load_emulator(pickle_file, y_train, X_train):
     
@@ -23,6 +25,83 @@ def load_emulator(pickle_file, y_train, X_train):
     emulator = Emulator(wrapped_gpmodel, X_train, data)
 
     return emulator
+
+def implausibility_metric(pred, obs, pred_var, obs_var):
+
+    top = np.abs(pred - obs)
+    bottom = np.sqrt(pred_var + obs_var)
+
+    imp = top/bottom
+
+    return imp
+
+def sensitivity_analysis(emulators, param_names, pft_id, out_dir, wave=None,
+                         update_vars=None, default_pars=None, plot_figs=False):
+    
+    sensitivity_dfs = []
+    for var, emulator in emulators.items():        
+        
+        problem, fast_sample = create_fast_sample(param_names, update_vars)
+        
+        if default_pars is not None:
+            fast_sample = update_sample(fast_sample, default_pars, param_names)
+        
+        sens_df = fourier_sensitivity(emulator, problem, fast_sample)
+        sens_df['var'] = var
+        sensitivity_dfs.append(sens_df)
+    
+        if plot_figs:
+            plot_fourier_sensitivity(sens_df, f'{var} for {pft_id} Grids')
+            plt.savefig(f'{out_dir}/{var}_emulator_fourier_sensitivity.png',
+                        bbox_inches='tight', dpi=300)
+    
+            plot_oaat_sens(param_names, emulator)
+            plt.savefig(f'{out_dir}/{var}_emulator_oaat_sensitivity.png',
+                            bbox_inches='tight', dpi=300)
+            
+    em_sensitivity = pd.concat(sensitivity_dfs)
+    if wave is not None:
+        em_sensitivity['wave'] = wave
+
+    return em_sensitivity
+
+def sample_emulators(emulators, param_names, n_samp, obs_df, out_dir, pft_id,
+                     update_vars=None, default_pars=None, plot_figs=False):
+    
+    # get a random sample
+    sample = get_random_params(len(param_names), n_samp)
+    
+    # update the sample if we are updating
+    if update_vars is not None:
+        sample = update_sample(sample, update_vars, param_names)
+    
+    if default_pars is not None:
+        sample = update_sample(sample, default_pars, param_names)
+        
+    sample_df = pd.DataFrame(sample)
+    sample_df.columns = param_names
+
+    for var, emulator in emulators.items():
+        
+        # predict sample
+        pred_sampled, pred_sampled_var = emulator.predict(sample)
+
+        # observational mean and variance
+        obs_mean = obs_df[f'{OBS_MODEL_VARS[var]}'].mean()
+        obs_var = obs_df[f'{OBS_MODEL_VARS[var]}_var'].mean()
+
+        if plot_figs:
+            plot_emulated_sample(pred_sampled, obs_mean, obs_var, pft_id, var,
+                                 VAR_UNITS[var])
+            plt.savefig(f'{out_dir}/{var}_emulated_sample.png',
+                        bbox_inches='tight', dpi=300)
+
+        # calculate implausibility metric
+        implaus = implausibility_metric(pred_sampled, obs_mean, pred_sampled_var,
+                                        obs_var)
+        sample_df[f'{var}_implausibility'] = implaus
+
+    return sample_df
 
 def load_all_emulators(pft_id, emulator_dir, vars):
 
@@ -90,7 +169,7 @@ def plot_fourier_sensitivity(sens_df, title):
     ax = plt.subplot(1, 1, 1)
     ax.bar(sens_df.names, sens_df['ST'], color='lightgrey', label='interactions')
     ax.bar(sens_df.names, sens_df['S1'], color='darkolivegreen', label='main effects')
-    ax.set_xticklabels(ax.get_xticklabels(), rotation=90)
+    ax.tick_params(axis='x', labelrotation=90)
     plt.legend(loc='upper right')
     plt.ylabel('Proportion of total emulated variance')
     plt.title(title)

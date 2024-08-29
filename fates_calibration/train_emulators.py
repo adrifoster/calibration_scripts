@@ -7,13 +7,12 @@ import matplotlib.pyplot as plt
 from esem import gp_model
 import pickle
 import gpflow
-import argparse
-from FATES_calibration_constants import VAR_UNITS, FATES_INDEX, FATES_PFT_IDS
+from fates_calibration.FATES_calibration_constants import VAR_UNITS, FATES_INDEX, FATES_PFT_IDS
 
 def get_pft_grids(land_mask_file, mesh_file, pft):
         
     mesh = xr.open_dataset(mesh_file)
-    mesh = mesh.where(mesh.elementMask == pft, drop=True)
+    mesh = mesh.where(mesh.elementMask == 1, drop=True)
     
     centerCoords = mesh.centerCoords.values
     grids = mesh.elementCount.values
@@ -96,7 +95,7 @@ def split_dataset(var: xr.DataArray, params: pd.DataFrame, n_test: int):
     Y = var[1:].values
 
     # test and training parameters
-    X_test, X_train = params[:n_test], params[n_test:]
+    X_test, X_train = params.iloc[:n_test].copy(), params.iloc[n_test:].copy()
 
     # test and training output
     y_test, y_train = Y[:n_test], Y[n_test:]
@@ -147,7 +146,8 @@ def plot_emulator_validation(var_preds, var, units, pft):
     plt.ylabel(f'Emulated {pft} mean annual mean {var} ({units})')
     plt.legend(loc='lower right')
     
-def train_all_emulators(ds, vars, params, n_test, num_params, out_dir, pft_id):
+def train_all_emulators(ds, vars, params, n_test, num_params, emulator_dir, fig_dir,
+                        pft_id):
 
     validation_dfs = []
     X_train_dfs = []
@@ -164,7 +164,7 @@ def train_all_emulators(ds, vars, params, n_test, num_params, out_dir, pft_id):
         em = make_emulator(num_params, X_train, y_train)
         
         # write to file
-        emulator_filename = os.path.join(out_dir, f"{pft_id}_{var}_emulator.pkl")
+        emulator_filename = os.path.join(emulator_dir, f"{pft_id}_{var}_emulator.pkl")
         with open(emulator_filename, "wb") as f:
             pickle.dump(em.model.model, f)
 
@@ -181,80 +181,30 @@ def train_all_emulators(ds, vars, params, n_test, num_params, out_dir, pft_id):
         y_train_dfs.append(y_df)
 
         plot_emulator_validation(df_validation, var, VAR_UNITS[var], pft_id)
-        plt.savefig(f'{out_dir}/{var}_emulator_validation.png',
+        plt.savefig(f'{fig_dir}/{pft_id}_{var}_emulator_validation.png',
                     bbox_inches='tight', dpi=300)
 
     em_validation = pd.concat(validation_dfs)
     X_trains = pd.concat(X_train_dfs)
     y_trains = pd.concat(y_train_dfs)
     
-    em_validation.to_csv(f'{out_dir}/em_validation_{pft_id}.csv')
-    X_trains.to_csv(f'{out_dir}/{pft_id}_X_train_data.csv')
-    y_trains.to_csv(f'{out_dir}/{pft_id}_y_train_data.csv')
+    em_validation.to_csv(f'{emulator_dir}/em_validation_{pft_id}.csv')
+    X_trains.to_csv(f'{emulator_dir}/{pft_id}_X_train_data.csv')
+    y_trains.to_csv(f'{emulator_dir}/{pft_id}_y_train_data.csv')
 
     return X_train, y_train
 
-def main(pft_index, pft_id, land_mask_file, mesh_file, ensemble_file, vars, lhckey,
-         n_test, out_dir):
+def train(pft, land_mask_file, mesh_file, ensemble_file, vars, lhckey,
+         n_test, emulator_dir, fig_dir):
     
     lhkey_df = pd.read_csv(lhckey)
     params = lhkey_df.drop(columns=['ensemble'])
     num_params = len(params.columns)
     
-    pft_grids = get_pft_grids(land_mask_file, mesh_file, pft_index)
+    pft_grids = get_pft_grids(land_mask_file, mesh_file, FATES_INDEX[pft])
     ensemble = get_pft_ensemble(ensemble_file, pft_grids)
     
-    train_all_emulators(ensemble, vars, params, n_test, num_params, out_dir, pft_id)
+    train_all_emulators(ensemble, vars, params, n_test, num_params, emulator_dir,
+                        fig_dir, FATES_PFT_IDS[pft])
     
-def commandline_args():
-    """Parse and return command-line arguments"""
-
-    description = """
-    Driver for regridding CLM h1 files
-
-    Typical usage:
-
-    ./run_fates_tests --pft pft
-
-    """
-    parser = argparse.ArgumentParser(
-        description=description, formatter_class=argparse.RawTextHelpFormatter
-    )
-
-    parser.add_argument(
-        "--pft",
-        type=str,
-        default=0,
-        help="PFT to train on\n",
-    )
     
-    args = parser.parse_args()
-
-    return args
-    
-
-if __name__ == "__main__":
-    
-    args = commandline_args()
-    
-    mesh_file_dir = '/glade/work/afoster/FATES_calibration/mesh_files'
-    
-    land_mask_file = os.path.join(mesh_file_dir, 'dominant_pft_grid.nc')
-    mesh_file = os.path.join(mesh_file_dir, 'dominant_pft_grid_mesh.nc')
-    
-    ensemble_dir = '/glade/work/afoster/FATES_calibration/FATES_SP_LH'
-    ensemble_file = os.path.join(ensemble_dir, 'dompft_ensemble.nc')
-    
-    lhckey = '/glade/u/home/afoster/FATES_Calibration/FATES_SP/LH/lh_key.csv'
-    
-    out_dir = '/glade/u/home/afoster/FATES_Calibration/FATES_SP/pft_output/emulators'
-    
-    vars = ['GPP', 'EFLX_LH_TOT', 'FSH', 'EF']
-    n_test = 50
-    
-    pft = args.pft
-    pft_index = FATES_INDEX[pft]
-    pft_id = FATES_PFT_IDS[pft]
-    
-    main(pft_index, pft_id, land_mask_file, mesh_file, ensemble_file, vars, lhckey,
-         n_test, out_dir)
