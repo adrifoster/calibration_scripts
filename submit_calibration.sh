@@ -15,4 +15,5 @@ pft=broadleaf_evergreen_tropical_tree
 module load conda
 conda activate ml_analysis
 
-mpiexec -n 16 python calibrate_emulate_sample.py --pft ${pft} --num_samples 100
+cd /glade/u/home/afoster/FATES_Calibration/scripts
+mpiexec -n 16 python calibrate_emulate_sample.py --pft ${pft} --bootstraps 100

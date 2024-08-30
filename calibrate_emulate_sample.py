@@ -1,9 +1,9 @@
 import os
 import pandas as pd
-import emulation_functions as emf
 import argparse
 from mpi4py import MPI
 
+import fates_calibration.emulation_functions as emf
 from fates_calibration.FATES_calibration_constants import FATES_PFT_IDS, FATES_INDEX
 
 DEFAULT_PARS = {
@@ -27,7 +27,7 @@ def choose_params(sample_df, sens_df, vars, implausibility_tol, sens_tol):
 
     if sample_sub.shape[0] > 0 and len(sensitive_pars) > 0:
         best_sample = emf.find_best_parameter_sets(sample_sub)
-        sample_out = best_sample.loc[:, [sensitive_pars, 'implaus_sum']]
+        sample_out = best_sample.loc[:, sensitive_pars]
     
         return sample_out.reset_index(drop=True)
     else:
@@ -89,7 +89,7 @@ def run_calibration(out_dir, pft, vars, emulator_dir, lhckey, obs_file, n_samp,
     
     emulators = emf.load_all_emulators(pft_id, emulator_dir, vars)
     
-    min_max_pars = pd.read_csv('/glade/u/home/afoster/FATES_Calibration/FATES_SP/FATES_LH_min_max_crops.csv')
+    min_max_pars = pd.read_csv('/glade/u/home/afoster/FATES_Calibration/FATES_LH_min_max_crops.csv')
     
     default_pars = DEFAULT_PARS[pft]
     default_parvals = emf.make_default_values(default_pars, min_max_pars, FATES_INDEX[pft])
@@ -146,7 +146,7 @@ def commandline_args():
     parser.add_argument(
         "--lhkey",
         type=str,
-        default='/glade/u/home/afoster/FATES_Calibration/FATES_SP/LH/lh_key.csv',
+        default='/glade/u/home/afoster/FATES_Calibration/lh_key_dompft.csv',
         help="path to Latin Hypercube parameter key\n",
     )
     parser.add_argument(
@@ -171,8 +171,8 @@ def main():
     comm = MPI.COMM_WORLD
     
     vars = ['GPP', 'EFLX_LH_TOT', 'FSH', 'EF']
-    emulator_dir = '/glade/u/home/afoster/FATES_Calibration/FATES_SP/pft_output/emulators'
-    top_dir = "/glade/u/home/afoster/FATES_Calibration/FATES_SP/pft_output"
+    emulator_dir = '/glade/u/home/afoster/FATES_Calibration/pft_output/emulators'
+    top_dir = "/glade/u/home/afoster/FATES_Calibration/pft_output"
         
     args = commandline_args()
     
@@ -192,6 +192,7 @@ def main():
                                         args.obs_file, args.nsamp, args.imp_tol, 
                                         args.sens_tol, args.num_waves)
         best_sets.append(best_param_set)
+    
     
     file_name = f"param_vals_{str(comm.rank)}.csv"
     best_params = pd.concat(best_sets)
