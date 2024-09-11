@@ -12,7 +12,13 @@ DEFAULT_PARS = {
                                           'fates_rad_leaf_clumping_index',
                                           'fates_nonhydro_smpsc', 'fates_nonhydro_smpso',
                                           'fates_leaf_slatop', 'fates_allom_fnrt_prof_a',
-                                          'fates_allom_fnrt_prof_b', 'fates_turb_displar']
+                                          'fates_allom_fnrt_prof_b', 'fates_turb_displar'],
+    'needleleaf_evergreen_extratrop_tree': ['fates_maintresp_leaf_atkin2017_baserate',
+                                            'fates_leaf_slatop', 
+                                            'fates_rad_leaf_clumping_index',
+                                            'fates_allom_fnrt_prob_b',
+                                            'fates_turb_z0mr', 'fates_nonhydro_smpso',
+                                            'fates_turb_displar']
 }
 
 def choose_params(sample_df, sens_df, vars, implausibility_tol, sens_tol):
@@ -178,13 +184,8 @@ def main():
     
     pft_id = FATES_PFT_IDS[args.pft]
     
-    out_dir = os.path.join(top_dir, f"{pft_id}_output")
-    if not os.path.isdir(out_dir):
-        os.mkdir(out_dir)
-        
+    out_dir = os.path.join(top_dir, f"{pft_id}_outputs")
     sample_dir = os.path.join(out_dir, 'samples')
-    if not os.path.isdir(sample_dir):
-        os.mkdir(sample_dir)
     
     best_sets = []
     for _ in range(args.bootstraps):
