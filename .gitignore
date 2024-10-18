@@ -4,3 +4,4 @@
 *logfiles
 *.o*
 *__pycache__**
+jobs/*

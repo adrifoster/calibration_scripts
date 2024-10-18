@@ -26,7 +26,7 @@ def postprocess(top_dir, histdir, data_vars):
                                parallel=True, autoclose=True)
 
         # fix time bug
-        ds['time'] = xr.cftime_range(str(2005), periods=12*60, freq='MS')
+        ds['time'] = xr.cftime_range(str(2005), periods=len(ds.time), freq='MS')
         ds = ds.sel(time=slice("2055-01-01", "2064-12-31"))
         ds['time'] = xr.cftime_range(str(2005), periods=12*10, freq='MS')
 
@@ -94,14 +94,18 @@ def postprocess_files(top_dir, postp_dir):
     bad_ensembles = []
     good_ensembles = []
     for histdir in dirs:
+        
         ensemble = histdir.split('_')[-1]
-        ds = postprocess(top_dir, histdir, data_vars)
-        if ds is not None:
-            out_file = os.path.join(postp_dir, f"{histdir}.nc")
-            ds.to_netcdf(out_file)
-            good_ensembles.append(ensemble)
-        else:
-            bad_ensembles.append(ensemble)
+        out_file = os.path.join(postp_dir, f"{histdir}.nc")
+        
+        if not os.path.isfile(out_file):
+            
+            ds = postprocess(top_dir, histdir, data_vars)
+            if ds is not None:
+                ds.to_netcdf(out_file)
+                good_ensembles.append(ensemble)
+            else:
+                bad_ensembles.append(ensemble)
     
     if len(bad_ensembles) > 0:
         with open('ensembles_good.txt', 'w') as f:

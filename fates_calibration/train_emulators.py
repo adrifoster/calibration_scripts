@@ -39,9 +39,9 @@ def get_pft_grids(land_mask_file, mesh_file, pft):
 
     return pft_grids
 
-def attach_land_area(ensemble, pft_grids):
+def attach_land_area(ensemble, pft_grids, ds0_file):
 
-    ds = xr.open_dataset('/glade/work/afoster/FATES_calibration/FATES_SP_LH/dompft_hist/ctsm51FATES_SP_dominatnPFTs_FATES_LH_000.nc')
+    ds = xr.open_dataset(ds0_file)
     ds0 = ds.isel(time=0)
 
     land_area = (ds0.landfrac*ds0.area*1000000.0).values
@@ -65,13 +65,13 @@ def attach_land_area(ensemble, pft_grids):
 
     return ensemble
 
-def get_pft_ensemble(ensemble_file, pft_grids):
+def get_pft_ensemble(ensemble_file, pft_grids, ds0_file):
     
     ensemble = xr.open_dataset(ensemble_file)
     
     ensemble_pft = ensemble.where(ensemble.gridcell.isin(pft_grids), drop=True)
 
-    ensemble_pft = attach_land_area(ensemble_pft, pft_grids)
+    ensemble_pft = attach_land_area(ensemble_pft, pft_grids, ds0_file)
 
     return ensemble_pft
 
@@ -195,14 +195,14 @@ def train_all_emulators(ds, vars, params, n_test, num_params, emulator_dir, fig_
     return X_train, y_train
 
 def train(pft, land_mask_file, mesh_file, ensemble_file, vars, lhckey,
-         n_test, emulator_dir, fig_dir):
+         n_test, emulator_dir, fig_dir, ds0_file):
     
     lhkey_df = pd.read_csv(lhckey)
     params = lhkey_df.drop(columns=['ensemble'])
     num_params = len(params.columns)
     
     pft_grids = get_pft_grids(land_mask_file, mesh_file, FATES_INDEX[pft])
-    ensemble = get_pft_ensemble(ensemble_file, pft_grids)
+    ensemble = get_pft_ensemble(ensemble_file, pft_grids, ds0_file)
     
     train_all_emulators(ensemble, vars, params, n_test, num_params, emulator_dir,
                         fig_dir, FATES_PFT_IDS[pft])

@@ -7,18 +7,33 @@ import fates_calibration.emulation_functions as emf
 from fates_calibration.FATES_calibration_constants import FATES_PFT_IDS, FATES_INDEX
 
 DEFAULT_PARS = {
-    'broadleaf_evergreen_tropical_tree': ['fates_turb_leaf_diameter', 'fates_turb_z0mr',
-                                          'fates_maintresp_leaf_atkin2017_baserate',
-                                          'fates_rad_leaf_clumping_index',
-                                          'fates_nonhydro_smpsc', 'fates_nonhydro_smpso',
-                                          'fates_leaf_slatop', 'fates_allom_fnrt_prof_a',
-                                          'fates_allom_fnrt_prof_b', 'fates_turb_displar'],
-    'needleleaf_evergreen_extratrop_tree': ['fates_maintresp_leaf_atkin2017_baserate',
-                                            'fates_leaf_slatop', 
-                                            'fates_rad_leaf_clumping_index',
-                                            'fates_allom_fnrt_prob_b',
-                                            'fates_turb_z0mr', 'fates_nonhydro_smpso',
-                                            'fates_turb_displar']
+    'broadleaf_evergreen_tropical_tree': ['fates_maintresp_leaf_atkin2017_baserate'],
+    'needleleaf_evergreen_extratrop_tree': ['fates_nonhydro_smpsc', 'fates_nonhydro_smpso'],
+    'needleleaf_colddecid_extratrop_tree': ['fates_maintresp_leaf_atkin2017_baserate'],
+    'arctic_c3_grass': ['fates_nonhydro_smpsc', 'fates_nonhydro_smpso'],
+    'cool_c3_grass': ['fates_nonhydro_smpso'],
+    'c4_grass': ['fates_maintresp_leaf_atkin2017_baserate'],
+    'broadleaf_evergreen_extratrop_tree': [],
+    'broadleaf_hydrodecid_tropical_tree': [],
+    'broadleaf_colddecid_extratrop_tree': [],
+    'broadleaf_colddecid_extratrop_shrub': [],
+    'c3_crop': [],
+    'c3_irrigated': []
+}
+
+IMPLAUS_TOL = {
+    'broadleaf_evergreen_tropical_tree': 1.0,
+    'needleleaf_colddecid_extratrop_tree': 1.0,
+    'needleleaf_evergreen_extratrop_tree': 1.0,
+    'arctic_c3_grass': 1.0,
+    'cool_c3_grass': 1.0,
+    'c4_grass': 3.0,
+    'broadleaf_evergreen_extratrop_tree': 1.0,
+    'broadleaf_hydrodecid_tropical_tree': 1.0,
+    'broadleaf_colddecid_extratrop_tree': 1.0,
+    'broadleaf_colddecid_extratrop_shrub': 1.0,
+    'c3_crop': 1.0,
+    'c3_irrigated': 1.0
 }
 
 def choose_params(sample_df, sens_df, vars, implausibility_tol, sens_tol):
@@ -112,7 +127,7 @@ def commandline_args():
     """Parse and return command-line arguments"""
 
     description = """
-    Typical usage: python calibrate_emulate_sample --pft broadleaf_evergreen_tropical_tree
+    Typical usage: python calibrate_emulate_sample --pft BETT
 
     """
     parser = argparse.ArgumentParser(
@@ -123,19 +138,13 @@ def commandline_args():
         "--pft",
         type=str,
         default=0,
-        help="PFT to calibrate\n",
+        help="PFT ID to calibrate\n",
     )
     parser.add_argument(
         "--nsamp",
         type=int,
         default=10000,
         help="Number of samples to emulate\n",
-    )
-    parser.add_argument(
-        "--imp_tol",
-        type=float,
-        default=1.0,
-        help="Implausibility tolerance\n",
     )
     parser.add_argument(
         "--sens_tol",
@@ -152,7 +161,7 @@ def commandline_args():
     parser.add_argument(
         "--lhkey",
         type=str,
-        default='/glade/u/home/afoster/FATES_Calibration/lh_key_dompft.csv',
+        default='/glade/u/home/afoster/FATES_Calibration/lh_key.csv',
         help="path to Latin Hypercube parameter key\n",
     )
     parser.add_argument(
@@ -174,28 +183,29 @@ def commandline_args():
 
 def main():
     
-    comm = MPI.COMM_WORLD
-    
     vars = ['GPP', 'EFLX_LH_TOT', 'FSH', 'EF']
     emulator_dir = '/glade/u/home/afoster/FATES_Calibration/pft_output/emulators'
     top_dir = "/glade/u/home/afoster/FATES_Calibration/pft_output"
         
     args = commandline_args()
     
-    pft_id = FATES_PFT_IDS[args.pft]
+    pft_id = args.pft
+    pft = list(FATES_PFT_IDS.keys())[list(FATES_PFT_IDS.values()).index(pft_id)]
+
+    implaus_tol = IMPLAUS_TOL[pft]
     
     out_dir = os.path.join(top_dir, f"{pft_id}_outputs")
     sample_dir = os.path.join(out_dir, 'samples')
     
     best_sets = []
     for _ in range(args.bootstraps):
-        best_param_set = run_calibration(out_dir, args.pft, vars, emulator_dir, args.lhkey,
-                                        args.obs_file, args.nsamp, args.imp_tol, 
+        best_param_set = run_calibration(out_dir, pft, vars, emulator_dir, args.lhkey,
+                                        args.obs_file, args.nsamp, implaus_tol, 
                                         args.sens_tol, args.num_waves)
         best_sets.append(best_param_set)
     
-    
-    file_name = f"param_vals_{str(comm.rank)}.csv"
+    rank = MPI.COMM_WORLD.rank
+    file_name = f"param_vals_{str(rank)}.csv"
     best_params = pd.concat(best_sets)
     best_params.to_csv(os.path.join(sample_dir, file_name))
         

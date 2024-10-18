@@ -132,7 +132,6 @@ def create_fast_sample(param_names, update_vars=None):
     }
     
     sample = fast_sampler.sample(problem, 1000, M=4, seed=None)
-    
     if update_vars is not None:
         sample = update_sample(sample, update_vars, param_names)
     
@@ -151,7 +150,6 @@ def fourier_sensitivity(emulator, problem, sample):
     return df_sens
   
 def update_sample(sample, update_vars, param_names):
-    
     pars_to_update = update_vars.columns
     for i in range(len(sample)):
         for par in pars_to_update:
@@ -248,15 +246,24 @@ def make_default_values(pars, min_max_pars, pft):
     df = pd.DataFrame(d)
     return df
 
-def plot_parameter_hists(sample):
+def plot_parameter_hists(sample, min_max_pars):
     
-    pars = sample.columns[:14]
+    pars = [par for par in sample.columns if par != 'wave']
     
     plt.figure(figsize=[18, 16])
     for i, par in enumerate(pars):
+        
+        par_min_max = min_max_pars[min_max_pars.parameter == par]
+        minpar = float(par_min_max[par_min_max.type == 'min']['val'].values[0])
+        maxpar = float(par_min_max[par_min_max.type == 'max']['val'].values[0])
+        defaultpar = float(par_min_max['default'].values[0])
+        p = (defaultpar - minpar)/(maxpar - minpar)
+        
         ax = plt.subplot(7, 5, i + 1)
         ax.hist(sample[par])
+        ax.axvline(x=p, color='r', linestyle='-')
         ax.set_xlabel(par)
+        ax.set_xlim(0, 1)
     plt.tight_layout()
     
 def find_sensitive_parameters(sens_df, vars, sens_tol):
@@ -269,6 +276,18 @@ def find_sensitive_parameters(sens_df, vars, sens_tol):
 
     return sensitive_pars
 
+def get_param_samples(sample_dir):
+    
+    files = sorted([os.path.join(sample_dir, file) for file in os.listdir(sample_dir) if file.endswith(".csv")])
+    sample_dfs = []
+    for file in files:
+        df = pd.read_csv(file, index_col=[0])
+        sample_dfs.append(df)
+    sample_df = pd.concat(sample_dfs)
+    sample_df = sample_df.drop(columns=['wave'])
+
+    return sample_df
+
 def find_best_parameter_sets(sample):
     best_sample_index = sample[['implaus_sum']].idxmin()
     best_sample = sample.loc[best_sample_index, :]
@@ -278,9 +297,15 @@ def get_rescaled_default_parval(min_max_pars, par, pft):
     
     par_min_max = min_max_pars[min_max_pars.parameter == par]
     par_min_max_pft = par_min_max[par_min_max.pft == str(pft)]
-    minpar = float(par_min_max_pft[par_min_max_pft.type == 'min']['val'].values[0])
-    maxpar = float(par_min_max_pft[par_min_max_pft.type == 'max']['val'].values[0])
-    defaultpar = float(par_min_max_pft['default'].values[0])
-    p = (defaultpar - minpar)/(maxpar - minpar)
+    minpar = [float(s) for s in par_min_max_pft[par_min_max_pft.type == 'min']['val'].values[0].split('_')]
+    maxpar = [float(s) for s in par_min_max_pft[par_min_max_pft.type == 'max']['val'].values[0].split('_')]
+    defaultpar = [float(s) for s in par_min_max_pft['default'].values[0].split('_')]
+    top = [default - minp for default, minp in zip(defaultpar, minpar)]
+    bottom = [maxp - minp for maxp, minp in zip(maxpar, minpar)]
+    p = [t/b for t, b in zip(top, bottom)]
+    if len(p) > 1:
+        p = np.mean(p)
+    else:
+        p = p[0]
     
     return p
