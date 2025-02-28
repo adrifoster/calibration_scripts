@@ -1,39 +1,27 @@
 import os
 import pandas as pd
 import argparse
+import numpy as np
 from mpi4py import MPI
 
 import fates_calibration.emulation_functions as emf
-from fates_calibration.FATES_calibration_constants import FATES_PFT_IDS, FATES_INDEX
+from fates_calibration.FATES_calibration_constants import FATES_PFT_IDS, FATES_INDEX, IMPLAUS_TOL
 
 DEFAULT_PARS = {
-    'broadleaf_evergreen_tropical_tree': ['fates_maintresp_leaf_atkin2017_baserate'],
-    'needleleaf_evergreen_extratrop_tree': ['fates_nonhydro_smpsc', 'fates_nonhydro_smpso'],
-    'needleleaf_colddecid_extratrop_tree': ['fates_maintresp_leaf_atkin2017_baserate'],
-    'arctic_c3_grass': ['fates_nonhydro_smpsc', 'fates_nonhydro_smpso'],
-    'cool_c3_grass': ['fates_nonhydro_smpso'],
-    'c4_grass': ['fates_maintresp_leaf_atkin2017_baserate'],
+    'broadleaf_evergreen_tropical_tree': [],
+    'needleleaf_evergreen_extratrop_tree': [],
+    'needleleaf_colddecid_extratrop_tree': [],
+    'arctic_c3_grass': [],
+    'cool_c3_grass': [],
+    'c4_grass': [],
     'broadleaf_evergreen_extratrop_tree': [],
     'broadleaf_hydrodecid_tropical_tree': [],
+    "broadleaf_evergreen_arctic_shrub": [],
+    "broadleaf_colddecid_arctic_shrub": [],
     'broadleaf_colddecid_extratrop_tree': [],
     'broadleaf_colddecid_extratrop_shrub': [],
     'c3_crop': [],
     'c3_irrigated': []
-}
-
-IMPLAUS_TOL = {
-    'broadleaf_evergreen_tropical_tree': 1.0,
-    'needleleaf_colddecid_extratrop_tree': 1.0,
-    'needleleaf_evergreen_extratrop_tree': 1.0,
-    'arctic_c3_grass': 1.0,
-    'cool_c3_grass': 1.0,
-    'c4_grass': 3.0,
-    'broadleaf_evergreen_extratrop_tree': 1.0,
-    'broadleaf_hydrodecid_tropical_tree': 1.0,
-    'broadleaf_colddecid_extratrop_tree': 1.0,
-    'broadleaf_colddecid_extratrop_shrub': 1.0,
-    'c3_crop': 1.0,
-    'c3_irrigated': 1.0
 }
 
 def choose_params(sample_df, sens_df, vars, implausibility_tol, sens_tol):
@@ -41,7 +29,13 @@ def choose_params(sample_df, sens_df, vars, implausibility_tol, sens_tol):
     # subset out anything over implausibility tolerance
     implaus_vars = [f"{var}_implausibility" for var in vars]
     sample_df['implaus_sum'] = emf.calculate_implaus_sum(sample_df, implaus_vars)
+
+    implaus_diff = np.max(sample_df.implaus_sum) - np.min(sample_df.implaus_sum)
+    if implaus_diff <= 0.5:
+       return None
+    
     sample_sub = emf.subset_sample(sample_df, implaus_vars, implausibility_tol)
+    
 
     # grab only the sensitive parameters
     sensitive_pars = emf.find_sensitive_parameters(sens_df, vars, sens_tol)
@@ -58,7 +52,7 @@ def calibration_wave(emulators, param_names, n_samp, obs_df, pft_id, out_dir, wa
                      implausibility_tol, sens_tol, update_vars=None, default_pars=None,
                      plot_figs=False):
     
-    sens_df = emf.sensitivity_analysis(emulators, param_names, pft_id, out_dir, wave,
+    sens_df, oaat_df = emf.sensitivity_analysis(emulators, param_names, pft_id, out_dir, wave,
                                    update_vars=update_vars, default_pars=default_pars,
                                    plot_figs=plot_figs)
     
@@ -110,16 +104,17 @@ def run_calibration(out_dir, pft, vars, emulator_dir, lhckey, obs_file, n_samp,
     
     emulators = emf.load_all_emulators(pft_id, emulator_dir, vars)
     
-    min_max_pars = pd.read_csv('/glade/u/home/afoster/FATES_Calibration/FATES_LH_min_max_crops.csv')
-    
-    default_pars = DEFAULT_PARS[pft]
-    default_parvals = emf.make_default_values(default_pars, min_max_pars, FATES_INDEX[pft])
+    #min_max_pars = pd.read_csv('/glade/u/home/afoster/FATES_Calibration/FATES_LH_min_max_crops.csv')
+    #default_pars = DEFAULT_PARS[pft]
+    #default_parvals = emf.make_default_values(default_pars, min_max_pars, FATES_INDEX[pft])
+    default_parvals = None
 
     best_param_set, wave = find_best_parameters(num_waves, emulators, param_names, n_samp,
                                           obs_df, pft_id, out_dir, implausibility_tol,
                                           sens_tol, default_pars=default_parvals)
-    
-    best_param_set['wave'] = wave
+
+    if best_param_set is not None:
+        best_param_set['wave'] = wave
     
     return best_param_set
 
@@ -143,13 +138,13 @@ def commandline_args():
     parser.add_argument(
         "--nsamp",
         type=int,
-        default=10000,
+        default=100000,
         help="Number of samples to emulate\n",
     )
     parser.add_argument(
         "--sens_tol",
         type=float,
-        default=0.01,
+        default=0.1,
         help="Sensitivity tolerance\n",
     )
     parser.add_argument(
@@ -161,13 +156,13 @@ def commandline_args():
     parser.add_argument(
         "--lhkey",
         type=str,
-        default='/glade/u/home/afoster/FATES_Calibration/lh_key.csv',
+        default='/glade/work/afoster/FATES_calibration/parameter_files/fates_param_lh/fates_lh_key.csv',
         help="path to Latin Hypercube parameter key\n",
     )
     parser.add_argument(
         "--obs_file",
         type=str,
-        default='/glade/work/afoster/FATES_calibration/mesh_files/dominant_pft_grid.csv',
+        default='/glade/work/afoster/FATES_calibration/mesh_files/dominant_pft_grid_update.csv',
         help="path to observations data frame\n",
     )
     parser.add_argument(
@@ -176,6 +171,12 @@ def commandline_args():
         default=1,
         help="Number of times to run calibration\n",
     )
+    parser.add_argument(
+        "--pft_var_file",
+        type=str,
+        default='/glade/u/home/afoster/FATES_Calibration/pft_vars_dompft_gs1.csv',
+        help="path to file with which variables to calibrate for each pft\n",
+    )
 
     args = parser.parse_args()
 
@@ -183,9 +184,8 @@ def commandline_args():
 
 def main():
     
-    vars = ['GPP', 'EFLX_LH_TOT', 'FSH', 'EF']
-    emulator_dir = '/glade/u/home/afoster/FATES_Calibration/pft_output/emulators'
-    top_dir = "/glade/u/home/afoster/FATES_Calibration/pft_output"
+    emulator_dir = '/glade/u/home/afoster/FATES_Calibration/pft_output_gs1/emulators'
+    top_dir = "/glade/u/home/afoster/FATES_Calibration/pft_output_gs1"
         
     args = commandline_args()
     
@@ -197,12 +197,17 @@ def main():
     out_dir = os.path.join(top_dir, f"{pft_id}_outputs")
     sample_dir = os.path.join(out_dir, 'samples')
     
+    var_dat = pd.read_csv(args.pft_var_file)
+    vars_pft = var_dat[var_dat.pft == pft].vars.values.tolist()
+    vars = [var.replace('_implausibility', '') for var in vars_pft]
+
     best_sets = []
     for _ in range(args.bootstraps):
         best_param_set = run_calibration(out_dir, pft, vars, emulator_dir, args.lhkey,
                                         args.obs_file, args.nsamp, implaus_tol, 
                                         args.sens_tol, args.num_waves)
-        best_sets.append(best_param_set)
+        if best_param_set is not None:
+            best_sets.append(best_param_set)
     
     rank = MPI.COMM_WORLD.rank
     file_name = f"param_vals_{str(rank)}.csv"

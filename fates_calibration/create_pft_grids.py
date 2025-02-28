@@ -76,11 +76,11 @@ def main(surdat_file, biome, lai, dom_threshold, lai_threshold, uncertainty_thre
 if __name__ == "__main__":
   
     # surface file
-    surdat_dir = "/glade/p/cesmdata/cseg/inputdata/lnd/clm2/surfdata_map/release-clm5.0.18"
-    surdat_2deg = os.path.join(surdat_dir, "surfdata_1.9x2.5_hist_16pfts_Irrig_CMIP6_simyr2000_c190304.nc")
+    surdat_dir = "/glade/campaign/cesm/cesmdata/inputdata/lnd/clm2/surfdata_esmf/ctsm5.3.0/"
+    surdat_2deg = os.path.join(surdat_dir, "surfdata_1.9x2.5_hist_2000_16pfts_c240908.nc")
     
     # observations
-    obs_dir = '/glade/u/home/afoster/FATES_Calibration/FATES_SP/observations'
+    obs_dir = '/glade/u/home/afoster/FATES_Calibration/observations'
     
     # ilamb MODIS LAI
     ilamb_obs = xr.open_dataset(os.path.join(obs_dir, 'ILAMB_obs.nc'))
@@ -110,9 +110,9 @@ if __name__ == "__main__":
                          uncert_threshold, filter_vars)
     
     ## write out files
-    dom_file_out = os.path.join(out_dir, 'dominant_pft_grid.nc')
+    dom_file_out = os.path.join(out_dir, 'dominant_pft_grid_fatesctsm6.nc')
     grid.to_netcdf(dom_file_out, encoding=encoding)
-    dom_pft_file = os.path.join(out_dir, 'dominant_pft_grid.csv')
+    dom_pft_file = os.path.join(out_dir, 'dominant_pft_grid_fatesctsm6.csv')
     grid_df.to_csv(dom_pft_file)
     
     # create the grid
@@ -120,6 +120,6 @@ if __name__ == "__main__":
                          uncert_threshold, filter_vars, dom_pft_file=dom_pft_file, co_dom=True)
     
     ## write out files
-    co_dom_file_out = os.path.join(out_dir, 'co_dominant_pft_grid.nc')
+    co_dom_file_out = os.path.join(out_dir, 'co_dominant_pft_grid_fatesctsm6.nc')
     co_grid.to_netcdf(co_dom_file_out, encoding=encoding)
-    co_grid_df.to_csv(os.path.join(out_dir, 'co_dominant_pft_grid.csv'))
+    co_grid_df.to_csv(os.path.join(out_dir, 'co_dominant_pft_grid_fatesctsm6.csv'))

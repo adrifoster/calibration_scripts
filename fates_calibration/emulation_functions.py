@@ -39,14 +39,15 @@ def sensitivity_analysis(emulators, param_names, pft_id, out_dir, wave=None,
                          update_vars=None, default_pars=None, plot_figs=False):
     
     sensitivity_dfs = []
-    for var, emulator in emulators.items():        
+    oaat_dfs = []
+    for var, emulator in emulators.items():
         
         problem, fast_sample = create_fast_sample(param_names, update_vars)
         
         if default_pars is not None:
             fast_sample = update_sample(fast_sample, default_pars, param_names)
         
-        sens_df = fourier_sensitivity(emulator, problem, fast_sample)
+        sens_df = fourier_sensitivity(emulator, problem, fast_sample, update_vars)
         sens_df['var'] = var
         sensitivity_dfs.append(sens_df)
     
@@ -55,15 +56,22 @@ def sensitivity_analysis(emulators, param_names, pft_id, out_dir, wave=None,
             plt.savefig(f'{out_dir}/{var}_emulator_fourier_sensitivity.png',
                         bbox_inches='tight', dpi=300)
     
-            plot_oaat_sens(param_names, emulator)
+            df = plot_oaat_sens(param_names, emulator)
             plt.savefig(f'{out_dir}/{var}_emulator_oaat_sensitivity.png',
                             bbox_inches='tight', dpi=300)
+            df['var'] = var
+            oaat_dfs.append(df)
+            
             
     em_sensitivity = pd.concat(sensitivity_dfs)
+    if plot_figs:
+        oaat_sensitivity = pd.concat(oaat_dfs)
+    else:
+        oaat_sensitivity = None
     if wave is not None:
         em_sensitivity['wave'] = wave
 
-    return em_sensitivity
+    return em_sensitivity, oaat_sensitivity
 
 def sample_emulators(emulators, param_names, n_samp, obs_df, out_dir, pft_id,
                      update_vars=None, default_pars=None, plot_figs=False):
@@ -137,10 +145,11 @@ def create_fast_sample(param_names, update_vars=None):
     
     return problem, sample
 
-def fourier_sensitivity(emulator, problem, sample):
+def fourier_sensitivity(emulator, problem, sample, update_vars=None):
 
     # fourier amplitude sensitivity test w/emulator
     Y, _ = emulator.predict(sample)
+
     FAST = fast.analyze(problem, Y, M=4, num_resamples=100, conf_level=0.95,
                         print_to_console=False, seed=None)
     sens = pd.DataFrame.from_dict(FAST)
@@ -178,11 +187,16 @@ def plot_oaat_sens(param_names, emulator):
     num_params = len(param_names)
 
     # hold all parameters at median value 
-    n = 21
+    n = 50
     unif = pd.concat([pd.DataFrame(np.tile(0.5, n))]*num_params, axis=1)
     unif.columns = param_names
     
     s = np.linspace(0, 1, n)
+    param = np.array([])
+    oaats = np.array([])
+    vars = np.array([])
+    samps = np.array([])
+    
     sample = unif
     
     plt.figure(figsize=[18, 16])
@@ -199,11 +213,22 @@ def plot_oaat_sens(param_names, emulator):
                         alpha=0.4)  # shade two standard deviations
         ax.plot(s, oaat, c='k')
         ax.set_xlabel(p)
+
+        oaats = np.append(oaats, oaat)
+        vars = np.append(vars, v)
+        param = np.append(param, np.repeat(p, n))
+        samps = np.append(samps, s)
         
         # set column back to before
         sample[p] = save 
 
     plt.tight_layout()
+    df = pd.DataFrame({'sample': samps,
+      'predict': oaats,
+      'variance': vars,
+      'parameter': param})
+    dataf = pd.DataFrame(df)
+    return dataf
 
 def plot_emulated_sample(pred_sampled, obs_mean, obs_var, pft_id, var, units):
     

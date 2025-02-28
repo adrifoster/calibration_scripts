@@ -4,7 +4,7 @@ import xarray as xr
 
 def get_ensemble(files):
     # read in dataset and attach other info
-    ds = xr.open_mfdataset(files, combine='nested', concat_dim='ensemble', 
+    ds = xr.open_mfdataset(files, combine='nested', concat_dim='ensemble',
                            parallel=True, chunks = {'time': 60, 'ensemble': 250, 'gridcell': 200})
     return ds
   
@@ -56,12 +56,15 @@ def calculate_vars(ds):
 
     # surface net radiation
     rn_ens = annual_mean(ds.RN, 1/365).mean(dim='year')
+
+    #BTRAN
+    btran_ens = annual_mean(ds.BTRANMN, 1/365).mean(dim='year')
     
 
 
     ensemble_ds = xr.merge([gpp_ens, lai_ens, lh_ens, sh_ens, ef_ens,
                             sw_ens, alb_ens, fsr_ens,
-                           fsa_ens, fire_ens, rlns_ens, rn_ens, grid1d_lat,
+                           fsa_ens, fire_ens, rlns_ens, rn_ens, btran_ens, grid1d_lat,
                            grid1d_lon])
 
     return ensemble_ds

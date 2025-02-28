@@ -6,10 +6,10 @@ if [ ! -d "${job_dir}" ]; then
 fi
 
 # dominant pfts
-#pft_ids=('BETT' 'NEET' 'NCET' 'AC3G' 'C4G' 'C3G')
+pft_ids=('BETT' 'NEET' 'NCET' 'AC3G' 'C4G' 'C3G')
 
 # codominant pfts
-pft_ids=('BCES', 'BDET', 'BEET' 'BDTT' 'C3C' 'C3CI')
+#pft_ids=('BCES' 'BDET' 'BEET' 'BDTT' 'C3C' 'C3CI')
 
 for pft_id in ${pft_ids[@]}; do
 
@@ -17,7 +17,7 @@ for pft_id in ${pft_ids[@]}; do
       rm ${job_dir}/calib_${pft_id}
     fi
 
-    pft_dir=/glade/u/home/afoster/FATES_Calibration/pft_output/${pft_id}_outputs/
+    pft_dir=/glade/u/home/afoster/FATES_Calibration/pft_output_gs1/${pft_id}_outputs/
     sample_dir=${pft_dir}/samples
     
     if [ ! -d "${pft_dir}" ]; then
@@ -31,7 +31,7 @@ for pft_id in ${pft_ids[@]}; do
     echo " " >> ${job_dir}/calib_${pft_id}
     echo "#PBS -N FATES_calib_${pft_id}" >> ${job_dir}/calib_${pft_id}
     echo "#PBS -q casper" >> ${job_dir}/calib_${pft_id}
-    echo "#PBS -l select=1:ncpus=16:mpiprocs=16:mem=10G" >> ${job_dir}/calib_${pft_id}
+    echo "#PBS -l select=1:ncpus=16:mpiprocs=16:mem=50G" >> ${job_dir}/calib_${pft_id}
     echo "#PBS -l walltime=12:00:00" >> ${job_dir}/calib_${pft_id}
     echo "#PBS -A P93300041" >> ${job_dir}/calib_${pft_id}
     echo "#PBS -j oe" >> ${job_dir}/calib_${pft_id}

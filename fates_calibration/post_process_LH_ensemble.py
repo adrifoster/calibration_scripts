@@ -26,9 +26,16 @@ def postprocess(top_dir, histdir, data_vars):
                                parallel=True, autoclose=True)
 
         # fix time bug
-        ds['time'] = xr.cftime_range(str(2005), periods=len(ds.time), freq='MS')
-        ds = ds.sel(time=slice("2055-01-01", "2064-12-31"))
-        ds['time'] = xr.cftime_range(str(2005), periods=12*10, freq='MS')
+        # ds['time'] = xr.cftime_range(str(2005), periods=len(ds.time), freq='MS')
+        # ds = ds.sel(time=slice("2055-01-01", "2064-12-31"))
+        # ds['time'] = xr.cftime_range(str(2005), periods=12*10, freq='MS')
+        
+        ds['time'] = xr.cftime_range(str(2000), periods=len(ds.time), freq='MS')
+        ds = ds.sel(time=slice("2060-01-01", "2074-12-31"))
+        ds['time'] = xr.cftime_range(str(2000), periods=len(ds.time), freq='MS')
+        # ds['time'] = xr.cftime_range(str(2005), periods=len(ds.time), freq='MS')
+        # ds = ds.sel(time=slice("2055-01-01", "2150-12-31"))
+        # ds['time'] = xr.cftime_range(str(2005), periods=len(ds.time), freq='MS')
 
         # calculate some variables
 
@@ -82,8 +89,8 @@ def postprocess(top_dir, histdir, data_vars):
 def postprocess_files(top_dir, postp_dir):
     
     data_vars = ['FATES_FRACTION', 'FATES_GPP', 'FATES_LAI', 'QVEGE', 'QVEGT',
-         'EFLX_LH_TOT', 'FSH', 'QRUNOFF', 'SOILWATER_10CM',
-         'FSR', 'FSDS', 'FSA', 'FIRE', 'FLDS', 'RAIN',
+         'EFLX_LH_TOT', 'FSH', 'QRUNOFF', 'SOILWATER_10CM','TBOT',
+         'FSR', 'FSDS', 'FSA', 'FIRE', 'FLDS', 'RAIN', 'BTRANMN',
          'SNOW', 'H2OSNO', 'SNOWDP', 'TSA', 'landfrac', 'area']
 
     if not os.path.isdir(postp_dir):

@@ -151,7 +151,7 @@ def get_biomass_ds(top_dir, sub_dir, model, filename, in_var, max_val=None, min_
     return biomass
 
 def get_annual_albedo(top_dir, in_var, out_var, units, longname, conversion_factor,
-                  rsds_dict, rsus_dict, tstart=None, tstop=None):
+                  rsds_dict, rsus_dict, tstart=None, tstop=None, average_years=False):
     
     # read in datasets
     rsds_path = os.path.join(top_dir, rsds_dict['sub_dir'], rsds_dict['model'],
@@ -178,17 +178,22 @@ def get_annual_albedo(top_dir, in_var, out_var, units, longname, conversion_fact
     land_area = xr.DataArray(areas, coords={"lat": lats, "lon": lons})
     
     annual = get_annual_obs(alb, in_var, conversion_factor)
-    
-    # get average and sd across years
-    annual_mean = annual.mean(dim='year').to_dataset(name=f'{out_var}')
-    annual_mean[f'{out_var}'].attrs['units'] = units
-    annual_mean[f'{out_var}'].attrs['long_name'] = f'average {longname}'
-    
-    annual_sd = annual.var(dim='year').to_dataset(name=f'{out_var}_iav')
-    annual_sd[f'{out_var}_iav'].attrs['units'] = units
-    annual_sd[f'{out_var}_iav'].attrs['long_name'] = f'interannual variation of {longname}'
-    
-    annual_ds = xr.merge([annual_mean, annual_sd])
+
+    if average_years:
+        # get average and sd across years
+        annual_mean = annual.mean(dim='year').to_dataset(name=f'{out_var}')
+        annual_mean[f'{out_var}'].attrs['units'] = units
+        annual_mean[f'{out_var}'].attrs['long_name'] = f'average {longname}'
+        
+        annual_sd = annual.var(dim='year').to_dataset(name=f'{out_var}_iav')
+        annual_sd[f'{out_var}_iav'].attrs['units'] = units
+        annual_sd[f'{out_var}_iav'].attrs['long_name'] = f'interannual variation of {longname}'
+        
+        annual_ds = xr.merge([annual_mean, annual_sd])
+    else:
+        annual_ds = annual.to_dataset(name=out_var)
+        annual_ds[out_var].attrs['units'] = units
+        annual_ds[out_var].attrs['long_name'] = longname
 
     # add in land area
     annual_ds['land_area'] = land_area
@@ -203,7 +208,7 @@ def get_annual_albedo(top_dir, in_var, out_var, units, longname, conversion_fact
     return annual_ds
     
 def get_annual_ef(top_dir, in_var, out_var, units, longname, conversion_factor,
-                  le_dict, sh_dict, tstart=None, tstop=None):
+                  le_dict, sh_dict, tstart=None, tstop=None, average_years=False):
     
     # read in datasets
     le_path = os.path.join(top_dir, le_dict['sub_dir'], le_dict['model'],
@@ -230,17 +235,22 @@ def get_annual_ef(top_dir, in_var, out_var, units, longname, conversion_factor,
     land_area = xr.DataArray(areas, coords={"lat": lats, "lon": lons})
     
     annual = get_annual_obs(ef, in_var, conversion_factor)
-    
-    # get average and sd across years
-    annual_mean = annual.mean(dim='year').to_dataset(name=f'{out_var}')
-    annual_mean[f'{out_var}'].attrs['units'] = units
-    annual_mean[f'{out_var}'].attrs['long_name'] = f'average {longname}'
-    
-    annual_sd = annual.var(dim='year').to_dataset(name=f'{out_var}_iav')
-    annual_sd[f'{out_var}_iav'].attrs['units'] = units
-    annual_sd[f'{out_var}_iav'].attrs['long_name'] = f'interannual variation of {longname}'
-    
-    annual_ds = xr.merge([annual_mean, annual_sd])
+
+    if average_years:
+        # get average and sd across years
+        annual_mean = annual.mean(dim='year').to_dataset(name=f'{out_var}')
+        annual_mean[f'{out_var}'].attrs['units'] = units
+        annual_mean[f'{out_var}'].attrs['long_name'] = f'average {longname}'
+        
+        annual_sd = annual.var(dim='year').to_dataset(name=f'{out_var}_iav')
+        annual_sd[f'{out_var}_iav'].attrs['units'] = units
+        annual_sd[f'{out_var}_iav'].attrs['long_name'] = f'interannual variation of {longname}'
+        
+        annual_ds = xr.merge([annual_mean, annual_sd])
+    else:
+        annual_ds = annual.to_dataset(name=out_var)
+        annual_ds[out_var].attrs['units'] = units
+        annual_ds[out_var].attrs['long_name'] = longname
 
     # add in land area
     annual_ds['land_area'] = land_area
@@ -257,7 +267,7 @@ def get_annual_ef(top_dir, in_var, out_var, units, longname, conversion_factor,
     
 def get_annual_ds(top_dir, sub_dir, model, filename, in_var, out_var, conversion_factor,
                   units, longname, tstart=None, tstop=None, max_val=None,
-                  min_val=None):
+                  min_val=None, average_years=False):
 
     # read in dataset
     file_path = os.path.join(top_dir, sub_dir, model, filename)
@@ -277,17 +287,22 @@ def get_annual_ds(top_dir, sub_dir, model, filename, in_var, out_var, conversion
     
     # calculate annual values
     annual = get_annual_obs(raw_ds, in_var, conversion_factor)
-    
-    # get average and sd across years
-    annual_mean = annual.mean(dim='year').to_dataset(name=f'{out_var}')
-    annual_mean[f'{out_var}'].attrs['units'] = units
-    annual_mean[f'{out_var}'].attrs['long_name'] = f'average {longname}'
-    
-    annual_sd = annual.var(dim='year').to_dataset(name=f'{out_var}_iav')
-    annual_sd[f'{out_var}_iav'].attrs['units'] = units
-    annual_sd[f'{out_var}_iav'].attrs['long_name'] = f'interannual variation of {longname}'
-    
-    annual_ds = xr.merge([annual_mean, annual_sd])
+
+    if average_years:
+        # get average and sd across years
+        annual_mean = annual.mean(dim='year').to_dataset(name=f'{out_var}')
+        annual_mean[f'{out_var}'].attrs['units'] = units
+        annual_mean[f'{out_var}'].attrs['long_name'] = f'average {longname}'
+        
+        annual_sd = annual.var(dim='year').to_dataset(name=f'{out_var}_iav')
+        annual_sd[f'{out_var}_iav'].attrs['units'] = units
+        annual_sd[f'{out_var}_iav'].attrs['long_name'] = f'interannual variation of {longname}'
+        
+        annual_ds = xr.merge([annual_mean, annual_sd])
+    else:
+        annual_ds = annual.to_dataset(name=out_var)
+        annual_ds[out_var].attrs['units'] = units
+        annual_ds[out_var].attrs['long_name'] = longname
 
     # add in land area
     annual_ds['land_area'] = land_area

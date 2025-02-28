@@ -13,11 +13,14 @@ DOM_THRESH =   {"broadleaf_evergreen_tropical_tree": 75,
                 "broadleaf_evergreen_extratrop_shrub": 30,
                 "broadleaf_hydrodecid_extratrop_shrub": 60,
                 "broadleaf_colddecid_extratrop_shrub": 60,
+                "broadleaf_evergreen_arctic_shrub": 60,
+                "broadleaf_colddecid_arctic_shrub": 60,
                 "arctic_c3_grass": 75,
                 "cool_c3_grass": 75,
                 "c4_grass": 75,
                 "c3_crop": 60,
                 "c3_irrigated": 30}
+CFT_MIN = 15
 
 def get_surdat(surdat_file: str) -> xr.Dataset:
     """Reads a CLM surface dataset and calculates the percent PFT and CFT
@@ -58,7 +61,7 @@ def get_dom_pft_landmask(surdat: xr.Dataset, pft_indices, dominance_threshold, l
     
     # subset surface data by pft
     # we allow more than one so that we can combine pfts (for FATES - CLM compatibility)
-    if pft_indices[0] <= 14:
+    if pft_indices[0] < CFT_MIN:
         pftvar = 'natpft'
         pftpctvar = 'PCT_NAT_PFT'
     else:
@@ -90,7 +93,7 @@ def get_dom_pft_landmask(surdat: xr.Dataset, pft_indices, dominance_threshold, l
 def get_lats_lons(dom_pft, pft_indices):
     
     # we allow more than one so that we can combine pfts (for FATES - CLM compatibility)
-    if pft_indices[0] <= 14:
+    if pft_indices[0] < CFT_MIN:
         pftpctvar = 'PCT_NAT_PFT'
     else:
         pftpctvar = 'PCT_CFT'
@@ -134,17 +137,18 @@ def get_coords(mesh_file: str) -> tuple[np.ndarray, int]:
 def extract_dominant_grids(surdat, dom_threshold, lai, lai_threshold):
     all_grids = []
     for pft in FATES_CLM_INDEX.keys():
+        if pft != "broadleaf_hydrodecid_extratrop_shrub":
         
-        pft_indices = FATES_CLM_INDEX[pft]
-        
-        num_gridcells, dompft = get_dom_pft_landmask(surdat, pft_indices,
-                                                     dom_threshold, lai, lai_threshold)
-        if num_gridcells >= 20:
-            lats, lons = get_lats_lons(dompft, pft_indices)
-            df = pd.DataFrame({'lats': lats, 'lons': lons})
-            df['pft'] = pft
-            all_grids.append(df)
+            pft_indices = FATES_CLM_INDEX[pft]
             
+            num_gridcells, dompft = get_dom_pft_landmask(surdat, pft_indices,
+                                                         dom_threshold, lai, lai_threshold)
+            if num_gridcells >= 20:
+                lats, lons = get_lats_lons(dompft, pft_indices)
+                df = pd.DataFrame({'lats': lats, 'lons': lons})
+                df['pft'] = pft
+                all_grids.append(df)
+                
     grids = pd.concat(all_grids)
 
     return grids
@@ -163,7 +167,7 @@ def extract_co_dominant_grids(surdat, dom_threshold, lai, lai_threshold, dom_pft
     for pft in non_dom_pfts:
         
         pft_indices = FATES_CLM_INDEX[pft]
-        if pft_indices[0] <= 14:
+        if pft_indices[0] < CFT_MIN:
             pftvar = 'natpft'
             pctvar = 'PCT_NAT_PFT'
         else:

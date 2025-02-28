@@ -35,13 +35,13 @@ def commandline_args():
     parser.add_argument(
         "--start_date",
         type=str,
-        default="2005-01-01",
+        default=None,
         help="Starting date of ILAMB data\n",
     )
     parser.add_argument(
         "--end_date",
         type=str,
-        default="2014-01-01",
+        default=None,
         help="Ending date of ILAMB data\n",
     )
     parser.add_argument(
@@ -118,7 +118,7 @@ def main():
                 rsds_dict,
                 rsus_dict,
                 args.start_date,
-                args.end_datetop,
+                args.end_date,
             )
 
         elif attributes["out_var"] == "biomass":
